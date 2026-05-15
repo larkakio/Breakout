@@ -4,10 +4,10 @@ import { baseAccount, injected } from 'wagmi/connectors';
 export const config = createConfig({
   chains: [base, mainnet],
   connectors: [
-    injected(),
     baseAccount({
       appName: 'Neon Breakout',
     }),
+    injected(),
   ],
   storage: createStorage({ storage: cookieStorage }),
   ssr: true,

@@ -1,9 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { encodeFunctionData } from 'viem';
 import { base } from 'wagmi/chains';
 import {
-  simulateContract,
+  getWalletClient,
+  reconnect,
   switchChain,
   waitForTransactionReceipt,
   writeContract,
@@ -17,25 +19,31 @@ import {
 } from '@/lib/contracts/checkInAddress';
 import { config } from '@/lib/wagmi/config';
 
+const BASE_ID = base.id;
+
 function formatError(err: unknown): string {
   if (err instanceof Error) {
     const msg = err.message;
     if (msg.includes('User rejected') || msg.includes('user rejected')) {
       return 'Transaction cancelled in wallet.';
     }
-    if (msg.includes('already today')) {
+    if (msg.includes('already today') || msg.includes('CheckIn: already')) {
       return 'Already synced today. Try again tomorrow.';
     }
-    return msg.length > 120 ? `${msg.slice(0, 120)}…` : msg;
+    if (msg.includes('Connector not connected')) {
+      return 'Wallet disconnected. Tap Connect Wallet, then try again.';
+    }
+    return msg.length > 140 ? `${msg.slice(0, 140)}…` : msg;
   }
-  return 'Transaction failed. Check wallet and network.';
+  return 'Transaction failed. Check wallet and Base network.';
 }
 
 export function CheckInPanel() {
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId, status } = useAccount();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [statusLine, setStatusLine] = useState<string | null>(null);
 
   const contract = CHECK_IN_CONTRACT_ADDRESS;
   const noContract = !isCheckInConfigured();
@@ -50,7 +58,7 @@ export function CheckInPanel() {
     abi: checkInAbi,
     functionName: 'lastCheckInDay',
     args: address ? [address] : undefined,
-    chainId: base.id,
+    chainId: BASE_ID,
     query: { enabled: Boolean(address && !noContract) },
   });
 
@@ -59,54 +67,92 @@ export function CheckInPanel() {
     abi: checkInAbi,
     functionName: 'streak',
     args: address ? [address] : undefined,
-    chainId: base.id,
+    chainId: BASE_ID,
     query: { enabled: Boolean(address && !noContract) },
   });
 
   const checkedInToday =
     lastDay !== undefined && Number(lastDay) >= today;
 
-  async function handleSync() {
-    if (!isConnected || !address || noContract || checkedInToday || busy) {
-      return;
-    }
+  const walletReady =
+    isConnected && status === 'connected' && Boolean(address);
 
-    setBusy(true);
+  async function handleSync() {
     setError(null);
+    setStatusLine(null);
     setTxHash(null);
 
-    const baseId = base.id;
+    if (!walletReady || !address) {
+      setError('Connect your wallet first.');
+      return;
+    }
+    if (noContract) {
+      setError('Check-in contract address is not configured.');
+      return;
+    }
+    if (checkedInToday) {
+      setError('Already synced today.');
+      return;
+    }
+    if (busy) return;
+
+    setBusy(true);
+    setStatusLine('Preparing…');
 
     try {
-      if (chainId !== baseId) {
-        await switchChain(config, { chainId: baseId });
+      await reconnect(config);
+
+      if (chainId !== BASE_ID) {
+        setStatusLine('Switching to Base…');
+        await switchChain(config, { chainId: BASE_ID });
       }
 
-      const dataSuffix = resolveDataSuffix();
+      setStatusLine('Confirm in wallet…');
 
-      const { request } = await simulateContract(config, {
-        address: contract,
+      const data = encodeFunctionData({
         abi: checkInAbi,
         functionName: 'checkIn',
-        chainId: baseId,
-        account: address,
       });
 
-      const hash = await writeContract(config, {
-        ...request,
-        chainId: baseId,
-        ...(dataSuffix ? { dataSuffix } : {}),
-      });
+      const dataSuffix = resolveDataSuffix();
+      let hash: `0x${string}`;
+
+      try {
+        hash = await writeContract(config, {
+          address: contract,
+          abi: checkInAbi,
+          functionName: 'checkIn',
+          chainId: BASE_ID,
+          account: address,
+          ...(dataSuffix ? { dataSuffix } : {}),
+        });
+      } catch (writeErr) {
+        if (!dataSuffix) throw writeErr;
+        setStatusLine('Retrying without builder tag…');
+        const walletClient = await getWalletClient(config, { chainId: BASE_ID });
+        if (!walletClient) {
+          throw new Error('Wallet client unavailable. Reconnect and try again.');
+        }
+        hash = await walletClient.sendTransaction({
+          to: contract,
+          data,
+          chain: base,
+          account: address,
+        });
+      }
 
       setTxHash(hash);
+      setStatusLine('Waiting for confirmation…');
 
       await waitForTransactionReceipt(config, {
         hash,
-        chainId: baseId,
+        chainId: BASE_ID,
       });
 
       await Promise.all([refetchLastDay(), refetchStreak()]);
+      setStatusLine(null);
     } catch (err) {
+      setStatusLine(null);
       setError(formatError(err));
     } finally {
       setBusy(false);
@@ -114,10 +160,10 @@ export function CheckInPanel() {
   }
 
   let label = 'Daily Sync';
-  if (!isConnected) label = 'Connect to Sync';
+  if (!walletReady) label = 'Connect to Sync';
   else if (noContract) label = 'Contract Not Set';
   else if (checkedInToday) label = 'Synced Today';
-  else if (busy) label = 'Confirm in wallet…';
+  else if (busy) label = statusLine ?? 'Confirm in wallet…';
 
   return (
     <section className="checkin-panel rounded-lg border border-violet-500/35 bg-black/50 p-2.5 backdrop-blur-md">
@@ -125,17 +171,18 @@ export function CheckInPanel() {
       <button
         type="button"
         className="btn-neon mt-2 w-full"
-        disabled={
-          !isConnected || noContract || checkedInToday || busy
-        }
+        disabled={!walletReady || noContract || checkedInToday || busy}
         onClick={() => void handleSync()}
       >
         {label}
       </button>
+      {statusLine && busy && !error && (
+        <p className="mt-2 text-center text-xs text-cyan-400/80">{statusLine}</p>
+      )}
       {error && (
         <p className="mt-2 text-center text-xs text-magenta-400">{error}</p>
       )}
-      {txHash && !error && (
+      {txHash && !error && !busy && (
         <p className="mt-2 break-all text-center text-xs text-lime-400/90">
           Synced!{' '}
           <a
@@ -146,11 +193,6 @@ export function CheckInPanel() {
           >
             View tx
           </a>
-        </p>
-      )}
-      {noContract && (
-        <p className="mt-2 text-center text-xs text-zinc-500">
-          Set NEXT_PUBLIC_CHECK_IN_CONTRACT_ADDRESS after deploy
         </p>
       )}
     </section>
