@@ -1,75 +1,123 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { base } from 'wagmi/chains';
 import {
-  useAccount,
-  useReadContract,
-  useSwitchChain,
-  useWriteContract,
-} from 'wagmi';
+  simulateContract,
+  switchChain,
+  waitForTransactionReceipt,
+  writeContract,
+} from 'wagmi/actions';
+import { useAccount, useReadContract } from 'wagmi';
 import { checkInAbi } from '@/lib/abi/checkIn';
+import { resolveDataSuffix } from '@/lib/builder/dataSuffix';
+import {
+  CHECK_IN_CONTRACT_ADDRESS,
+  isCheckInConfigured,
+} from '@/lib/contracts/checkInAddress';
+import { config } from '@/lib/wagmi/config';
 
-const ZERO = '0x0000000000000000000000000000000000000000' as const;
+function formatError(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message;
+    if (msg.includes('User rejected') || msg.includes('user rejected')) {
+      return 'Transaction cancelled in wallet.';
+    }
+    if (msg.includes('already today')) {
+      return 'Already synced today. Try again tomorrow.';
+    }
+    return msg.length > 120 ? `${msg.slice(0, 120)}…` : msg;
+  }
+  return 'Transaction failed. Check wallet and network.';
+}
 
 export function CheckInPanel() {
   const { address, isConnected, chainId } = useAccount();
-  const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
-  const { writeContractAsync, isPending: isWriting } = useWriteContract();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
-  const contract = process.env.NEXT_PUBLIC_CHECK_IN_CONTRACT_ADDRESS as
-    | `0x${string}`
-    | undefined;
+  const contract = CHECK_IN_CONTRACT_ADDRESS;
+  const noContract = !isCheckInConfigured();
 
   const today = useMemo(
     () => Math.floor(Date.now() / 1000 / 86400),
     [],
   );
 
-  const { data: lastDay } = useReadContract({
+  const { data: lastDay, refetch: refetchLastDay } = useReadContract({
     address: contract,
     abi: checkInAbi,
     functionName: 'lastCheckInDay',
     args: address ? [address] : undefined,
-    query: { enabled: Boolean(contract && address) },
+    chainId: base.id,
+    query: { enabled: Boolean(address && !noContract) },
   });
 
-  const { data: streak } = useReadContract({
+  const { data: streak, refetch: refetchStreak } = useReadContract({
     address: contract,
     abi: checkInAbi,
     functionName: 'streak',
     args: address ? [address] : undefined,
-    query: { enabled: Boolean(contract && address) },
+    chainId: base.id,
+    query: { enabled: Boolean(address && !noContract) },
   });
 
   const checkedInToday =
     lastDay !== undefined && Number(lastDay) >= today;
 
-  const noContract = !contract || contract === ZERO;
-
   async function handleSync() {
-    if (!isConnected || !address || noContract) return;
-
-    const baseId = base.id;
-    if (chainId !== baseId) {
-      await switchChainAsync({ chainId: baseId });
+    if (!isConnected || !address || noContract || checkedInToday || busy) {
+      return;
     }
 
-    // Builder code is appended via wagmi config `dataSuffix` (ERC-8021).
-    await writeContractAsync({
-      address: contract!,
-      abi: checkInAbi,
-      functionName: 'checkIn',
-      chainId: baseId,
-    });
+    setBusy(true);
+    setError(null);
+    setTxHash(null);
+
+    const baseId = base.id;
+
+    try {
+      if (chainId !== baseId) {
+        await switchChain(config, { chainId: baseId });
+      }
+
+      const dataSuffix = resolveDataSuffix();
+
+      const { request } = await simulateContract(config, {
+        address: contract,
+        abi: checkInAbi,
+        functionName: 'checkIn',
+        chainId: baseId,
+        account: address,
+      });
+
+      const hash = await writeContract(config, {
+        ...request,
+        chainId: baseId,
+        ...(dataSuffix ? { dataSuffix } : {}),
+      });
+
+      setTxHash(hash);
+
+      await waitForTransactionReceipt(config, {
+        hash,
+        chainId: baseId,
+      });
+
+      await Promise.all([refetchLastDay(), refetchStreak()]);
+    } catch (err) {
+      setError(formatError(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const busy = isSwitching || isWriting;
   let label = 'Daily Sync';
   if (!isConnected) label = 'Connect to Sync';
   else if (noContract) label = 'Contract Not Set';
   else if (checkedInToday) label = 'Synced Today';
-  else if (busy) label = isSwitching ? 'Switching…' : 'Signing…';
+  else if (busy) label = 'Confirm in wallet…';
 
   return (
     <section className="checkin-panel rounded-lg border border-violet-500/35 bg-black/50 p-2.5 backdrop-blur-md">
@@ -84,6 +132,22 @@ export function CheckInPanel() {
       >
         {label}
       </button>
+      {error && (
+        <p className="mt-2 text-center text-xs text-magenta-400">{error}</p>
+      )}
+      {txHash && !error && (
+        <p className="mt-2 break-all text-center text-xs text-lime-400/90">
+          Synced!{' '}
+          <a
+            href={`https://basescan.org/tx/${txHash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            View tx
+          </a>
+        </p>
+      )}
       {noContract && (
         <p className="mt-2 text-center text-xs text-zinc-500">
           Set NEXT_PUBLIC_CHECK_IN_CONTRACT_ADDRESS after deploy
