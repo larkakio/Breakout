@@ -1,0 +1,145 @@
+@import 'tailwindcss';
+
+:root {
+  --void: #050508;
+  --grid: #1a1a2e;
+  --neon-cyan: #00f5ff;
+  --neon-magenta: #ff00aa;
+  --neon-lime: #b8ff00;
+  --neon-violet: #7b2fff;
+}
+
+@theme inline {
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+body {
+  background: var(--void);
+  color: #fff;
+}
+
+.font-display {
+  font-family: var(--font-display), 'Orbitron', sans-serif;
+}
+
+.font-mono {
+  font-family: ui-monospace, monospace;
+}
+
+.safe-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.btn-neon {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(0, 245, 255, 0.55);
+  background: linear-gradient(
+    135deg,
+    rgba(123, 47, 255, 0.35),
+    rgba(0, 245, 255, 0.2)
+  );
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #00f5ff;
+  box-shadow:
+    0 0 12px rgba(0, 245, 255, 0.35),
+    inset 0 0 20px rgba(123, 47, 255, 0.15);
+  transition:
+    box-shadow 0.2s,
+    transform 0.15s;
+}
+
+.btn-neon:hover:not(:disabled) {
+  box-shadow:
+    0 0 20px rgba(255, 0, 170, 0.45),
+    0 0 28px rgba(0, 245, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-neon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  color: rgba(0, 245, 255, 0.7);
+}
+
+.btn-ghost:hover {
+  color: #ff00aa;
+}
+
+.neon-flicker {
+  animation: neon-flicker 2.8s ease-in-out infinite;
+}
+
+@keyframes neon-flicker {
+  0%,
+  100% {
+    opacity: 1;
+    text-shadow:
+      0 0 8px #00f5ff,
+      0 0 16px #7b2fff;
+  }
+  50% {
+    opacity: 0.88;
+    text-shadow:
+      0 0 4px #ff00aa,
+      0 0 12px #00f5ff;
+  }
+  52% {
+    opacity: 1;
+  }
+  54% {
+    opacity: 0.75;
+  }
+}
+
+.scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.12) 2px,
+    rgba(0, 0, 0, 0.12) 4px
+  );
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-dock {
+  border-top: 1px solid rgba(0, 245, 255, 0.1);
+  background: rgba(5, 5, 8, 0.95);
+  padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkin-panel {
+  margin: 0;
+}
+
+.wallet-bar {
+  padding-bottom: 0;
+}
+
+.game-shell {
+  isolation: isolate;
+  flex: 1 1 auto;
+  min-height: 0;
+}
