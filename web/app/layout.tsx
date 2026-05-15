@@ -16,10 +16,10 @@ const rajdhani = Rajdhani({
 });
 
 const baseAppId =
-  process.env.NEXT_PUBLIC_BASE_APP_ID ?? 'neon-breakout-placeholder';
+  process.env.NEXT_PUBLIC_BASE_APP_ID ?? '6a06c69b036192ebadae2851';
 
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://breakout-tau-black.vercel.app';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

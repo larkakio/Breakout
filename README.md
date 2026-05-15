@@ -27,7 +27,10 @@ forge script script/Deploy.s.sol --rpc-url $BASE_RPC_URL --broadcast
 **Deployed CheckIn (Base mainnet):** `0x4bABd6c59335610705D29586f922f5c089BB1437`  
 Set `NEXT_PUBLIC_CHECK_IN_CONTRACT_ADDRESS` in Vercel / `web/.env.local` (already in `.env.example`).
 
-Register on [base.dev](https://base.dev) — add `NEXT_PUBLIC_BASE_APP_ID`, `NEXT_PUBLIC_BUILDER_CODE`, upload `web/public/app-icon.jpg` and `app-thumbnail.jpg`.
+**Production:** https://breakout-tau-black.vercel.app  
+**Base App ID:** `6a06c69b036192ebadae2851`
+
+Register on [base.dev](https://base.dev) — add `NEXT_PUBLIC_BUILDER_CODE`, upload `web/public/app-icon.jpg` and `app-thumbnail.jpg`.
 
 ## Vercel
 
