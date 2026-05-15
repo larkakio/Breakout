@@ -9,7 +9,6 @@ import {
   useWriteContract,
 } from 'wagmi';
 import { checkInAbi } from '@/lib/abi/checkIn';
-import { resolveDataSuffix } from '@/lib/builder/dataSuffix';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as const;
 
@@ -56,13 +55,12 @@ export function CheckInPanel() {
       await switchChainAsync({ chainId: baseId });
     }
 
-    const dataSuffix = resolveDataSuffix();
+    // Builder code is appended via wagmi config `dataSuffix` (ERC-8021).
     await writeContractAsync({
       address: contract!,
       abi: checkInAbi,
       functionName: 'checkIn',
       chainId: baseId,
-      ...(dataSuffix ? { dataSuffix } : {}),
     });
   }
 

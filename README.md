@@ -28,9 +28,10 @@ forge script script/Deploy.s.sol --rpc-url $BASE_RPC_URL --broadcast
 Set `NEXT_PUBLIC_CHECK_IN_CONTRACT_ADDRESS` in Vercel / `web/.env.local` (already in `.env.example`).
 
 **Production:** https://breakout-tau-black.vercel.app  
-**Base App ID:** `6a06c69b036192ebadae2851`
+**Base App ID:** `6a06c69b036192ebadae2851`  
+**Builder Code:** `bc_t2oa95ge` (ERC-8021 via `ox` → wagmi `dataSuffix`)
 
-Register on [base.dev](https://base.dev) — add `NEXT_PUBLIC_BUILDER_CODE`, upload `web/public/app-icon.jpg` and `app-thumbnail.jpg`.
+Register on [base.dev](https://base.dev) — upload `web/public/app-icon.jpg` and `app-thumbnail.jpg`.
 
 ## Vercel
 
